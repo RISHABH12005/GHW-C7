@@ -39,6 +39,7 @@ ON stocks_real_time (symbol, time DESC);
 def main():
     with psycopg.connect(DATABASE_URL, connect_timeout=10) as conn:
         conn.execute(SCHEMA)
+        conn.execute(\"\"\"INSERT INTO company (symbol, name) VALUES ('AAPL', 'Apple Inc.'), ('MSFT', 'Microsoft Corporation') ON CONFLICT (symbol) DO NOTHING;\"\"\")
     print("Tiger Cloud schema is ready: company and stocks_real_time.")
 
 if __name__ == "__main__":
