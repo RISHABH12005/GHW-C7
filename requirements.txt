@@ -1,0 +1,4 @@
+psycopg[binary]>=3.2,<4
+python-dotenv>=1.0,<2
+twelvedata>=1.2,<2
+websocket-client>=1.7,<2
