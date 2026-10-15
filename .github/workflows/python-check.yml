@@ -8,14 +8,19 @@ on:
 
 jobs:
   syntax:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
+
       - name: Compile Python files
         run: python -m compileall -q setup_db.py ingest.py
+
       - name: Check required project files
         run: |
           test -s README.md
