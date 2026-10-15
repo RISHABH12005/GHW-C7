@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 
 import psycopg
 from dotenv import load_dotenv
-from psycopg.rows import dict_row
 from twelvedata import TDClient
 
 load_dotenv()
@@ -28,8 +27,6 @@ def shutdown(_signum, _frame):
     log.info("Shutdown requested.")
     stop_event.set()
 
-signal.signal(signal.SIGINT, shutdown)
-signal.signal(signal.SIGTERM, shutdown)
 
 def parse_time(value):
     if value is None:
@@ -110,6 +107,8 @@ def on_event(event):
                 time.sleep(2)
 
 def main():
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
     if not API_KEY:
         raise SystemExit("TWELVEDATA_API_KEY is missing. Add it to .env.")
     if not DATABASE_URL:
