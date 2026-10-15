@@ -22,6 +22,8 @@ FLUSH_SECONDS = max(1, int(os.getenv("FLUSH_SECONDS", "5")))
 stop_event = threading.Event()
 buffer = []
 last_flush = time.monotonic()
+QUOTE_POLL_SECONDS = max(15, int(os.getenv("QUOTE_POLL_SECONDS", "30")))
+last_quote_poll = 0.0
 
 def shutdown(_signum, _frame):
     log.info("Shutdown requested.")
@@ -96,6 +98,7 @@ def flush_batch():
     log.info("Inserted batch of %d tick rows.", len(rows))
 
 def on_event(event):
+    log.info("WebSocket message received (type=%s).", type(event).__name__)
     row = normalize_event(event)
     if row:
         buffer.append(row)
@@ -105,6 +108,43 @@ def on_event(event):
             except Exception:
                 log.exception("Batch insert failed; buffered rows retained for retry.")
                 time.sleep(2)
+
+def poll_rest_quotes(client):
+    """Fetch current quote snapshots as a fallback and diagnostic for quiet WebSocket feeds."""
+    global last_quote_poll
+    success_count = 0
+    for symbol in SYMBOLS:
+        try:
+            response = client.quote(symbol=symbol).as_json()
+            if isinstance(response, list):
+                response = response[0] if response else {}
+            if not isinstance(response, dict):
+                log.warning("REST quote for %s returned an unexpected payload type: %s", symbol, type(response).__name__)
+                continue
+            raw_price = response.get("price") or response.get("close")
+            if raw_price in (None, ""):
+                log.warning("REST quote for %s did not include price/close; response keys: %s", symbol, sorted(response.keys()))
+                continue
+            price = float(raw_price)
+            if price <= 0:
+                log.warning("REST quote for %s returned non-positive price.", symbol)
+                continue
+            timestamp = response.get("timestamp") or response.get("datetime")
+            row = (parse_time(timestamp), symbol, price, None, None,
+                   float(response["volume"]) if response.get("volume") not in (None, "") else None,
+                   "quote_snapshot")
+            buffer.append(row)
+            success_count += 1
+        except Exception as exc:
+            log.warning("REST quote failed for %s (%s): %s", symbol, type(exc).__name__, exc)
+    if buffer:
+        try:
+            flush_batch()
+        except Exception:
+            log.exception("Could not persist REST quote snapshots.")
+    last_quote_poll = time.monotonic()
+    log.info("REST quote poll completed: %d/%d symbols stored.", success_count, len(SYMBOLS))
+
 
 def main():
     signal.signal(signal.SIGINT, shutdown)
@@ -125,10 +165,14 @@ def main():
     ws = client.websocket(symbols=SYMBOLS, on_event=on_event)
     try:
         ws.connect()
+        # Persist an initial real quote even if this account has limited WebSocket entitlements.
+        poll_rest_quotes(client)
         while not stop_event.wait(1):
             try:
                 if time.monotonic() - last_flush >= FLUSH_SECONDS:
                     flush_batch()
+                if time.monotonic() - last_quote_poll >= QUOTE_POLL_SECONDS:
+                    poll_rest_quotes(client)
                 if hasattr(ws, "heartbeat"):
                     ws.heartbeat()
             except Exception:
