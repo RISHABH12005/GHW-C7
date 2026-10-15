@@ -1,0 +1,66 @@
+name: Live financial ingestion test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Validate repository secrets
+        env:
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          test -n "$TWELVEDATA_API_KEY" || (echo "::error::Add TWELVEDATA_API_KEY under Settings > Secrets and variables > Actions" && exit 1)
+          test -n "$DATABASE_URL" || (echo "::error::Add DATABASE_URL under Settings > Secrets and variables > Actions" && exit 1)
+      - name: Create Tiger Cloud schema
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python setup_db.py
+      - name: Ingest real-time ticks for three minutes
+        env:
+          TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SYMBOLS: ${{ vars.SYMBOLS || 'AAPL,MSFT' }}
+          BATCH_SIZE: "10"
+          FLUSH_SECONDS: "3"
+          LOG_LEVEL: INFO
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=10s 180s python ingest.py
+          result=$?
+          set -e
+          if [ "$result" -ne 0 ] && [ "$result" -ne 124 ] && [ "$result" -ne 143 ]; then
+            echo "::error::Ingestion process failed with exit code $result"
+            exit "$result"
+          fi
+      - name: Verify data reached Tiger Cloud
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          python - <<'PY'
+          import os, sys, psycopg
+          with psycopg.connect(os.environ["DATABASE_URL"], connect_timeout=15) as conn:
+              count = conn.execute(
+                  "SELECT COUNT(*) FROM stocks_real_time WHERE received_at > now() - interval '15 minutes'"
+              ).fetchone()[0]
+              totals = conn.execute(
+                  "SELECT symbol, COUNT(*) FROM stocks_real_time WHERE received_at > now() - interval '15 minutes' GROUP BY symbol ORDER BY symbol"
+              ).fetchall()
+          print(f"Rows ingested during the last 15 minutes: {count}")
+          print(f"Rows by symbol: {totals}")
+          if count == 0:
+              sys.exit("No recent rows found. Check API access and Twelve Data logs.")
+          PY
