@@ -84,15 +84,16 @@ def flush_batch():
     rows = list(buffer)
     # Keep timestamp precision as given by provider. ON CONFLICT handles duplicate ticks.
     with psycopg.connect(DATABASE_URL, connect_timeout=10) as conn:
-        conn.executemany(
-            """
-            INSERT INTO stocks_real_time
-                (time, symbol, price, bid, ask, day_volume, event_type)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT DO NOTHING
-            """,
-            rows,
-        )
+        with conn.cursor() as cur:
+            cur.executemany(
+                """
+                INSERT INTO stocks_real_time
+                    (time, symbol, price, bid, ask, day_volume, event_type)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                rows,
+            )
     del buffer[:len(rows)]
     last_flush = time.monotonic()
     log.info("Inserted batch of %d tick rows.", len(rows))
@@ -147,8 +148,6 @@ def poll_rest_quotes(client):
 
 
 def main():
-    signal.signal(signal.SIGINT, shutdown)
-    signal.signal(signal.SIGTERM, shutdown)
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
     if not API_KEY:
