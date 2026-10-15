@@ -1,0 +1,25 @@
+name: Python checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Compile Python files
+        run: python -m compileall -q setup_db.py ingest.py
+      - name: Check required project files
+        run: |
+          test -s README.md
+          test -s setup_db.py
+          test -s ingest.py
+          test -s sql/analytics.sql
+          test -s .env.example
