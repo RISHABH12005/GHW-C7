@@ -109,6 +109,8 @@ def on_event(event):
 def main():
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
     if not API_KEY:
         raise SystemExit("TWELVEDATA_API_KEY is missing. Add it to .env.")
     if not DATABASE_URL:
