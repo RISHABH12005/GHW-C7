@@ -28,13 +28,14 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python setup_db.py
-      - name: Ingest real-time ticks for three minutes
+      - name: Ingest financial data for three minutes
         env:
           TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SYMBOLS: ${{ vars.SYMBOLS || 'AAPL,MSFT' }}
           BATCH_SIZE: "10"
           FLUSH_SECONDS: "3"
+          QUOTE_POLL_SECONDS: "30"
           LOG_LEVEL: INFO
         shell: bash
         run: |
@@ -59,8 +60,12 @@ jobs:
               totals = conn.execute(
                   "SELECT symbol, COUNT(*) FROM stocks_real_time WHERE received_at > now() - interval '15 minutes' GROUP BY symbol ORDER BY symbol"
               ).fetchall()
+              latest = conn.execute(
+                  "SELECT time, symbol, price, event_type FROM stocks_real_time ORDER BY received_at DESC LIMIT 10"
+              ).fetchall()
           print(f"Rows ingested during the last 15 minutes: {count}")
           print(f"Rows by symbol: {totals}")
+          print(f"Latest records: {latest}")
           if count == 0:
-              sys.exit("No recent rows found. Check API access and Twelve Data logs.")
+              sys.exit("No recent rows found. Review REST quote failures and WebSocket messages above.")
           PY
