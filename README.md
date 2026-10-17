@@ -1,62 +1,86 @@
-# Real-Time Financial Data Ingestion into Tiger Cloud
+# Real-Time Stock Data Tracker
 
-A Python data pipeline for streaming financial price updates from Twelve Data into Tiger Cloud (PostgreSQL + TimescaleDB). The pipeline stores timestamped price/bid/ask/volume events in a hypertable, handles duplicate timestamps safely, and includes SQL for checking ingestion and aggregating ticks into OHLC candlesticks.
+This project collects live stock market updates and saves them so you can explore how prices change over time.
 
-## Architecture
+It was created for the **Global Hack Week Open Source challenge** using Twelve Data and Tiger Cloud.
 
-Twelve Data WebSocket → Python ingestion worker → Tiger Cloud `stocks_real_time` hypertable → SQL analytics / OHLC view.
+## What does it do?
 
-## Requirements
+- Receives stock market updates as they arrive.
+- Saves price, volume, and other market information.
+- Handles repeated updates without needlessly saving the same entry twice.
+- Includes example queries for reviewing recent updates and summarizing price changes over time.
 
-- Python 3.10+
-- A Tiger Cloud service with TimescaleDB enabled
-- A Twelve Data account and API key with access to the symbols/WebSocket plan you use
-- Tiger Cloud PostgreSQL connection string
+## How it works
 
-## Configure secrets
+1. Twelve Data provides market updates.
+2. The project collects those updates.
+3. The data is saved in a Tiger Cloud database.
+4. You can run the included SQL examples to explore recent prices and summaries.
 
-Copy `.env.example` to `.env` and fill in your own values. Never commit `.env`, API keys, or database credentials.
+## What you need
 
-```bash
-python -m venv .venv
-source .venv/bin/activate        # Windows PowerShell: .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-cp .env.example .env             # Windows: copy .env.example .env
-```
+Before running the project, you will need:
 
-Set:
-- `TWELVEDATA_API_KEY` — your Twelve Data API key.
-- `DATABASE_URL` — Tiger Cloud PostgreSQL connection URI, including SSL mode if required (for example `?sslmode=require`).
-- `SYMBOLS` — comma-separated symbols supported by your Twelve Data plan, default `AAPL,MSFT`.
-- `BATCH_SIZE` — in-memory batch flush size, default `25`.
+- Python 3.10 or later.
+- A [Twelve Data](https://twelvedata.com/) account and API key with access to the market data you want.
+- A [Tiger Cloud](https://console.cloud.timescale.com/) database.
+- The database connection details.
 
-## Run the pipeline
+## Set up and run
 
-Initialize schema and hypertable:
+1. Download or clone this repository.
+2. Create a Python virtual environment and install the packages:
 
-```bash
-python setup_db.py
-```
+   ```bash
+   python -m venv .venv
+   ```
 
-Start ingesting data:
+   Activate it:
 
-```bash
-python ingest.py
-```
+   - **Windows PowerShell:** `.venv\Scripts\Activate.ps1`
+   - **macOS/Linux:** `source .venv/bin/activate`
 
-Stop gracefully with Ctrl+C. Rows are written in small batches to reduce per-tick transaction overhead.
+   Then install the packages:
 
-## Validate and query
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Run the SQL in [sql/analytics.sql](sql/analytics.sql) in your Tiger Cloud SQL editor. It includes recent ticks, per-symbol summaries, and a minute-level OHLC view.
+3. Copy `.env.example` to a new file named `.env`.
+4. Add your Twelve Data API key and Tiger Cloud database connection details to `.env`. You can also change the stock symbols the project follows.
+5. Prepare the database:
 
-## Notes
+   ```bash
+   python setup_db.py
+   ```
 
-- The Twelve Data WebSocket requires a valid API key and a subscription that permits the symbols and real-time access requested. Market data may only arrive during relevant trading sessions.
-- This repository includes code for a real-time pipeline, but this repo itself does not contain a Twelve Data key or a live Tiger Cloud service URL.
-- Use this for technical learning and data engineering demonstrations, not as financial advice.
+6. Start collecting updates:
 
-## References
+   ```bash
+   python ingest.py
+   ```
 
-- [MLH challenge: Ingest real-time financial data into Tiger Cloud](https://www.mlh.com/events/global-hack-week-open-source-90/challenges)
-- [Tiger Data WebSocket tutorial](https://www.tigerdata.com/docs/tutorials/financial-ingest-real-time/)
+Stop the program with **Ctrl+C**.
+
+**Important:** You must provide your own API key and database. Market updates depend on your data plan and the availability of market data. Never upload your `.env` file or share your keys and database password.
+
+## Explore the data
+
+Open [sql/analytics.sql](sql/analytics.sql) in your Tiger Cloud SQL editor to try the included examples. They show recent updates, summaries for each stock, and a minute-by-minute view of price activity.
+
+## Project files
+
+- `ingest.py` — collects and saves market updates.
+- `setup_db.py` — prepares the database.
+- `sql/analytics.sql` — example queries for exploring the data.
+- `.env.example` — shows which settings you need to provide.
+
+## Learn more
+
+- [Twelve Data](https://twelvedata.com/)
+- [Tiger Cloud](https://console.cloud.timescale.com/)
+- [Tiger Data real-time financial data tutorial](https://www.tigerdata.com/docs/tutorials/financial-ingest-real-time/)
+- [Global Hack Week](https://www.mlh.com/events/global-hack-week-open-source-90/challenges)
+
+This project is for learning and demonstration. It is not financial advice.
